@@ -254,7 +254,9 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
         )?)
     }
 
-    /// Reads instruction accounts/data from input and sends in transaction to specified program
+    /// Reads instruction accounts/data from input.
+    /// 
+    /// If program_id is None, will ask user for a pubkey.
     ///
     /// # Account Format:
     /// `[meta] [pubkey]`
@@ -263,9 +265,20 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     /// `[pubkey]` - the address of the account
     pub async fn read_instruction(
         &mut self,
-        program_id: Pubkey,
+        program_id: Option<Pubkey>,
     ) -> Result<Instruction, Box<dyn Error>> {
         let mut line = String::new();
+        let program_id = match program_id {
+            Some(id) => id,
+            None => {
+                self.output.write_all(b"program id: ").await?;
+                self.output.flush().await?;
+                self.input.read_line(&mut line).await?;
+                let id = Pubkey::from_str(line.trim())?;
+                line.clear();
+                id
+            }
+        };
         self.output.write_all(b"num accounts: ").await?;
         self.output.flush().await?;
         self.input.read_line(&mut line).await?;
@@ -308,7 +321,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     /// Reads a user-specified number of instructions with the same format as `read_instruction`.
     pub async fn read_instructions(
         &mut self,
-        program_id: Pubkey,
+        program_id: Option<Pubkey>,
     ) -> Result<Vec<Instruction>, Box<dyn Error>> {
         let mut ret = Vec::new();
         let mut line = String::new();
