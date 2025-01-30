@@ -11,10 +11,10 @@ repository = "https://github.com/otter-sec/sol-ctf-framework"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-solana-sdk = "*"
-solana-program = "*"
-solana-program-test = "*"
-spl-token = "*"
+solana-sdk = "^1.18.26"
+solana-program = "^1.18.26"
+solana-program-test = "^1.18.26"
+spl-token = "^4.0.0"
 tempfile = "3.2.0"
 sha2 = "0.10.2"
 rand = "0.7.3"
