@@ -2,11 +2,11 @@
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::signer::signers::Signers;
 use solana_sdk::{program_pack::Pack, signature::Signer, transaction::Transaction};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use std::error::Error;
 use std::fs::File;
-use std::str::FromStr;
 use std::io::Write;
+use std::str::FromStr;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -255,7 +255,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     }
 
     /// Reads instruction accounts/data from input.
-    /// 
+    ///
     /// If program_id is None, will ask user for a pubkey.
     ///
     /// # Account Format:
