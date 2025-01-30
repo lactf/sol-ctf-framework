@@ -81,10 +81,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> ChallengeBuilder<R, W> {
 
     /// Reads program from input and adds it to environment
     pub async fn input_program(&mut self) -> Result<Pubkey, Box<dyn Error>> {
-        self.output.write_all(b"program pubkey: ").await?;
+        self.output.write_all(b"program pubkey:\n").await?;
         let program_key = Pubkey::from_str(&self.read_line().await?)?;
 
-        self.output.write_all(b"program len: ").await?;
+        self.output.write_all(b"program len:\n").await?;
         let len: usize = std::cmp::min(10_000_000, self.read_line().await?.parse()?);
 
         let mut input_so = vec![0; len];
@@ -264,7 +264,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
         program_id: Pubkey,
     ) -> Result<Instruction, Box<dyn Error>> {
         let mut line = String::new();
-        self.output.write_all(b"num accounts: ").await?;
+        self.output.write_all(b"num accounts:\n").await?;
         self.input.read_line(&mut line).await?;
         let num_accounts: usize = line.trim().parse()?;
 
@@ -289,7 +289,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
         }
 
         line.clear();
-        self.output.write_all(b"ix len: ").await?;
+        self.output.write_all(b"ix len:\n").await?;
         self.input.read_line(&mut line).await?;
         let ix_data_len: usize = line.trim().parse()?;
         let mut ix_data = vec![0; ix_data_len];
@@ -299,6 +299,22 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
         let ix = Instruction::new_with_bytes(program_id, &ix_data, metas);
 
         Ok(ix)
+    }
+
+    /// Reads a user-specified number of instructions with the same format as `read_instruction`.
+    pub async fn read_instructions(
+        &mut self,
+        program_id: Pubkey,
+    ) -> Result<Vec<Instruction>, Box<dyn Error>> {
+        let mut ret = Vec::new();
+        let mut line = String::new();
+        self.output.write_all(b"ix count:\n").await?;
+        self.input.read_line(&mut line).await?;
+        let ix_count: usize = line.trim().parse()?;
+        for _ in 0..ix_count.min(256) {
+            ret.push(self.read_instruction(program_id).await?);
+        }
+        Ok(ret)
     }
 }
 
