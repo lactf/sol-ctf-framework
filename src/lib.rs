@@ -2,11 +2,11 @@
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::signer::signers::Signers;
 use solana_sdk::{program_pack::Pack, signature::Signer, transaction::Transaction};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
 use std::str::FromStr;
+use std::io::Write;
 
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -16,6 +16,12 @@ use solana_sdk::{
 
 use tempfile::Builder;
 
+use tokio::net::TcpStream;
+
+use tokio::io::{
+    AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
+};
+
 mod helpers {
     use rand::{prelude::StdRng, SeedableRng};
     use sha2::{Digest, Sha256};
@@ -23,7 +29,7 @@ mod helpers {
 
     pub fn keypair_from_data(data: &[u8]) -> Keypair {
         let mut hash = Sha256::default();
-        hash.update(&data);
+        hash.update(data);
 
         // panic here is probably fine since this should always be 32 bytes, regardless of user input
         let mut rng = StdRng::from_seed(hash.finalize()[..].try_into().unwrap());
@@ -31,22 +37,22 @@ mod helpers {
     }
 }
 
-pub struct Challenge<R: BufRead, W: Write> {
+pub struct Challenge<R, W> {
     input: R,
     output: W,
     pub ctx: ProgramTestContext,
 }
 
-pub struct ChallengeBuilder<R: BufRead, W: Write> {
+pub struct ChallengeBuilder<R, W> {
     input: R,
     output: W,
     pub builder: ProgramTest,
 }
 
-impl<R: BufRead, W: Write> ChallengeBuilder<R, W> {
-    fn read_line(&mut self) -> Result<String, Box<dyn Error>> {
+impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> ChallengeBuilder<R, W> {
+    async fn read_line(&mut self) -> Result<String, Box<dyn Error>> {
         let mut line = String::new();
-        self.input.read_line(&mut line)?;
+        self.input.read_line(&mut line).await?;
 
         Ok(line.replace("\n", ""))
     }
@@ -74,15 +80,15 @@ impl<R: BufRead, W: Write> ChallengeBuilder<R, W> {
     }
 
     /// Reads program from input and adds it to environment
-    pub fn input_program(&mut self) -> Result<Pubkey, Box<dyn Error>> {
-        writeln!(self.output, "program pubkey: ")?;
-        let program_key = Pubkey::from_str(&self.read_line()?)?;
+    pub async fn input_program(&mut self) -> Result<Pubkey, Box<dyn Error>> {
+        self.output.write_all(b"program pubkey: ").await?;
+        let program_key = Pubkey::from_str(&self.read_line().await?)?;
 
-        writeln!(self.output, "program len: ")?;
-        let len: usize = std::cmp::min(10_000_000, self.read_line()?.parse()?);
+        self.output.write_all(b"program len: ").await?;
+        let len: usize = std::cmp::min(10_000_000, self.read_line().await?.parse()?);
 
         let mut input_so = vec![0; len];
-        self.input.read_exact(&mut input_so)?;
+        self.input.read_exact(&mut input_so).await?;
 
         let dir = Builder::new()
             .prefix("my-temporary-dir")
@@ -94,13 +100,13 @@ impl<R: BufRead, W: Write> ChallengeBuilder<R, W> {
 
         input_file.write_all(&input_so)?;
 
-        self.add_program(&file_path.to_str().unwrap(), Some(program_key));
+        self.add_program(file_path.to_str().unwrap(), Some(program_key));
 
         Ok(program_key)
     }
 }
 
-impl<R: BufRead, W: Write> Challenge<R, W> {
+impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     pub fn builder(input: R, output: W) -> ChallengeBuilder<R, W> {
         let mut builder = ProgramTest::default();
         builder.prefer_bpf(true);
@@ -132,8 +138,8 @@ impl<R: BufRead, W: Write> Challenge<R, W> {
                 spl_token::instruction::initialize_account(
                     &spl_token::ID,
                     &token_account,
-                    &mint,
-                    &owner,
+                    mint,
+                    owner,
                 )?,
             ],
             Some(&payer.pubkey()),
@@ -253,16 +259,19 @@ impl<R: BufRead, W: Write> Challenge<R, W> {
     ///
     /// `[meta]` - contains "s" if account is a signer, "w" if it is writable
     /// `[pubkey]` - the address of the account
-    pub fn read_instruction(&mut self, program_id: Pubkey) -> Result<Instruction, Box<dyn Error>> {
+    pub async fn read_instruction(
+        &mut self,
+        program_id: Pubkey,
+    ) -> Result<Instruction, Box<dyn Error>> {
         let mut line = String::new();
-        writeln!(self.output, "num accounts: ")?;
-        self.input.read_line(&mut line)?;
+        self.output.write_all(b"num accounts: ").await?;
+        self.input.read_line(&mut line).await?;
         let num_accounts: usize = line.trim().parse()?;
 
         let mut metas = vec![];
         for _ in 0..num_accounts {
             line.clear();
-            self.input.read_line(&mut line)?;
+            self.input.read_line(&mut line).await?;
 
             let mut it = line.trim().split(' ');
             let meta = it.next().ok_or("bad meta")?;
@@ -280,12 +289,12 @@ impl<R: BufRead, W: Write> Challenge<R, W> {
         }
 
         line.clear();
-        writeln!(self.output, "ix len: ")?;
-        self.input.read_line(&mut line)?;
+        self.output.write_all(b"ix len: ").await?;
+        self.input.read_line(&mut line).await?;
         let ix_data_len: usize = line.trim().parse()?;
         let mut ix_data = vec![0; ix_data_len];
 
-        self.input.read_exact(&mut ix_data)?;
+        self.input.read_exact(&mut ix_data).await?;
 
         let ix = Instruction::new_with_bytes(program_id, &ix_data, metas);
 
@@ -293,11 +302,12 @@ impl<R: BufRead, W: Write> Challenge<R, W> {
     }
 }
 
-impl TryFrom<TcpStream> for ChallengeBuilder<BufReader<TcpStream>, TcpStream> {
+impl TryFrom<TcpStream> for ChallengeBuilder<BufReader<OwnedReadHalf>, OwnedWriteHalf> {
     type Error = std::io::Error;
 
     fn try_from(socket: TcpStream) -> Result<Self, Self::Error> {
-        let reader = BufReader::new(socket.try_clone()?);
-        Ok(Challenge::builder(reader, socket))
+        let (reader, writer) = socket.into_split();
+        let bufreader = BufReader::new(reader);
+        Ok(Challenge::builder(bufreader, writer))
     }
 }

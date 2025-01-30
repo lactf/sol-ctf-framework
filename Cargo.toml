@@ -1,25 +1,25 @@
 [package]
-name = "sol-ctf-framework"
-version = "0.1.0"
-edition = "2021"
-license = "BSD-3-Clause"
-homepage = "https://github.com/otter-sec/sol-ctf-framework"
 description = "A framework for building solana based capture the flag challenges"
+edition = "2021"
+homepage = "https://github.com/otter-sec/sol-ctf-framework"
+license = "BSD-3-Clause"
+name = "sol-ctf-framework"
 repository = "https://github.com/otter-sec/sol-ctf-framework"
-
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-solana-sdk = "^1.18.26"
+rand = "0.7.3"
+sha2 = "0.10.2"
 solana-program = "^1.18.26"
 solana-program-test = "^1.18.26"
+solana-sdk = "^1.18.26"
 spl-token = "^4.0.0"
 tempfile = "3.2.0"
-sha2 = "0.10.2"
-rand = "0.7.3"
+tokio = {version = "^1.43.0", features = ["io-util", "net"]}
 
 [dev-dependencies]
-threadpool = "1.8.1"
 anchor-client = "*"
 solana-program = "*"
+threadpool = "1.8.1"
