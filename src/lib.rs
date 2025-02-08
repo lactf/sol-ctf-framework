@@ -127,7 +127,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     ) -> Result<Pubkey, Box<dyn Error>> {
         let token_account_keypair = Keypair::new();
         let token_account = token_account_keypair.pubkey();
-        let payer = &self.ctx.payer;
+        let payer = self.ctx.payer.insecure_clone();
         let mut tx = Transaction::new_with_payer(
             &[
                 solana_program::system_instruction::create_account(
@@ -146,7 +146,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
             ],
             Some(&payer.pubkey()),
         );
-        tx.sign(&[&token_account_keypair, payer], self.ctx.last_blockhash);
+        tx.sign(
+            &[&token_account_keypair, &payer],
+            self.ctx.get_new_latest_blockhash().await?,
+        );
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -158,7 +161,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     pub async fn add_mint(&mut self) -> Result<Pubkey, Box<dyn Error>> {
         let mint_keypair = Keypair::new();
         let mint = mint_keypair.pubkey();
-        let payer = &self.ctx.payer;
+        let payer = self.ctx.payer.insecure_clone();
         let mut tx = Transaction::new_with_payer(
             &[
                 solana_program::system_instruction::create_account(
@@ -178,7 +181,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
             ],
             Some(&payer.pubkey()),
         );
-        tx.sign(&[&mint_keypair, payer], self.ctx.last_blockhash);
+        tx.sign(
+            &[&mint_keypair, &payer],
+            self.ctx.get_new_latest_blockhash().await?,
+        );
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -205,11 +211,14 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     }
 
     pub async fn run_ixs(&mut self, ixs: &[Instruction]) -> Result<(), Box<dyn Error>> {
-        let payer_keypair = &self.ctx.payer;
+        let payer_keypair = self.ctx.payer.insecure_clone();
         let payer = payer_keypair.pubkey();
         let mut tx = Transaction::new_with_payer(ixs, Some(&payer));
 
-        tx.sign(&[payer_keypair], self.ctx.last_blockhash);
+        tx.sign(
+            &[&payer_keypair],
+            self.ctx.get_new_latest_blockhash().await?,
+        );
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -230,7 +239,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     ) -> Result<(), Box<dyn Error>> {
         let mut tx = Transaction::new_with_payer(ixs, Some(payer));
 
-        tx.sign(signers, self.ctx.last_blockhash);
+        tx.sign(signers, self.ctx.get_new_latest_blockhash().await?);
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
