@@ -146,10 +146,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
             ],
             Some(&payer.pubkey()),
         );
-        tx.sign(
+        tx.try_sign(
             &[&token_account_keypair, &payer],
             self.ctx.get_new_latest_blockhash().await?,
-        );
+        )?;
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -181,10 +181,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
             ],
             Some(&payer.pubkey()),
         );
-        tx.sign(
+        tx.try_sign(
             &[&mint_keypair, &payer],
             self.ctx.get_new_latest_blockhash().await?,
-        );
+        )?;
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -215,10 +215,10 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
         let payer = payer_keypair.pubkey();
         let mut tx = Transaction::new_with_payer(ixs, Some(&payer));
 
-        tx.sign(
+        tx.try_sign(
             &[&payer_keypair],
             self.ctx.get_new_latest_blockhash().await?,
-        );
+        )?;
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
@@ -239,7 +239,7 @@ impl<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin> Challenge<R, W> {
     ) -> Result<(), Box<dyn Error>> {
         let mut tx = Transaction::new_with_payer(ixs, Some(payer));
 
-        tx.sign(signers, self.ctx.get_new_latest_blockhash().await?);
+        tx.try_sign(signers, self.ctx.get_new_latest_blockhash().await?)?;
         self.ctx
             .banks_client
             .process_transaction_with_preflight(tx)
